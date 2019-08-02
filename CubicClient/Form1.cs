@@ -9,7 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-// This is the code for your desktop app.
+// This is code for a sample desktop app.  
+// Please note that exceptions are not properly handled here.
 // Press Ctrl+F5 (or go to Debug > Start Without Debugging) to run your app.
 
 namespace CubicClient
@@ -23,38 +24,23 @@ namespace CubicClient
             InitializeComponent();
             this.textBoxURL.Text = "demo-cubic.cobaltspeech.com:2727";
             this.checkBoxSecureConnection.Checked = true;
-            this.comboBox1.Enabled = false;
+            this.modelPicker.Enabled = false;
             this.buttonTranscribe.Enabled = false;
         }
 
         private void ButtonConnect_Click(object sender, EventArgs e)
         {
-            if (client != null)
+            if (client == null)
             {
-                // We want to disconnect
-                this.buttonConnect.Text = "Connect"; // They can click again to connect
-                this.textBoxURL.Enabled = true; // We are dropping a connection, so they can change this
-                this.checkBoxSecureConnection.Enabled = true; // And change this.
-                this.buttonTranscribe.Enabled = false;// But there is no longer a need to transcribe
-
-                // Clear out the combo box
-                this.comboBox1.Items.Clear();
-                this.comboBox1.Enabled = false;
-
-                // Close down the session
-                cubicModels = null;
-                client = null;
-            }
-            else
-            {
-                this.buttonConnect.Text = "Disconnect";
+                // Setup a new connection
+                this.buttonConnect.Text = "Disconnect"; // If they click on it again, it will disconnect.
+                // Prevent the user from changing the connection parameters while connected.
                 this.textBoxURL.Enabled = false;
                 this.checkBoxSecureConnection.Enabled = false;
                 this.buttonTranscribe.Enabled = true;
 
-                // TODO setup gRPC stuff
+                // Setup gRPC stuff
                 var url = textBoxURL.Text;
-
                 var creds = Grpc.Core.ChannelCredentials.Insecure;
                 if (this.checkBoxSecureConnection.Checked)
                 {
@@ -67,16 +53,32 @@ namespace CubicClient
                 var listModelsRequest = new CobaltSpeech.Cubic.ListModelsRequest();
                 var models = client.ListModels(listModelsRequest);
                 cubicModels = new List<CobaltSpeech.Cubic.Model> { };
-                this.comboBox1.Enabled = true;
+                this.modelPicker.Enabled = true;
                 foreach (var m in models.Models)
                 {
-                    this.comboBox1.Items.Add(m.Name);
+                    this.modelPicker.Items.Add(m.Name);
                     cubicModels.Add(m);
                 }
 
                 // Fetch the Version
                 var versions = client.Version(new Google.Protobuf.WellKnownTypes.Empty());
                 this.labelVersion.Text = String.Format("Versions: CubicSvr {0}, Cubic {1}", versions.Server, versions.Cubic);
+            }
+            else
+            {
+                // We want to disconnect
+                this.buttonConnect.Text = "Connect";
+                this.textBoxURL.Enabled = true;
+                this.checkBoxSecureConnection.Enabled = true;
+                this.buttonTranscribe.Enabled = false;  // Must be connected before clicking Transcribe
+
+                // Clear out the model combo box
+                this.modelPicker.Items.Clear();
+                this.modelPicker.Enabled = false; // Must be connected before a model can be selected
+
+                // Close down the session
+                cubicModels = null;
+                client = null;
             }
         }
 
@@ -93,66 +95,64 @@ namespace CubicClient
 
         private void ButtonTranscribe_Click(object sender, EventArgs e)
         {
-            this.textBoxResults.Text = ""; // Clear the text box from the prvious run.
+            this.textBoxResults.Text = ""; // Clear the text box from the previous run.
             LaunchStream();
         }
 
         private async void LaunchStream()
         {
 
-            // Setup the gRPC connection for BiDi streaming.
+            // Setup the gRPC connection for bidirectional streaming.
             var call = client.StreamingRecognize();
 
             using (call)
             {
-                // Setup Recieve task
+
+
+                // Setup receive task (callback)
                 var responseReaderTask = Task.Run(async () =>
                 {
-                // Wait for the next response
-                while (await call.ResponseStream.MoveNext())
+                    // Wait for the next response.
+                    while (await call.ResponseStream.MoveNext())
                     {
-                    // Grab the current response.
-                    var response = call.ResponseStream.Current;
+                        // Grab the current response.
+                        var response = call.ResponseStream.Current;
                         foreach (var result in response.Results)
                         {
-                        // Throw away partial results
-                        if (!result.IsPartial)
+                            // Throw away partial results and silent frames.
+                            if (!result.IsPartial && result.Alternatives.Count > 0)
                             {
-                            // Throw away empty responses (silent frames)
-                            if (result.Alternatives.Count > 0)
-                                {
-                                    // Write them out to the text box.
-                                    SetText(result.Alternatives[0].Transcript);
-                                    SetText(Environment.NewLine);
-                                }
+                                // Write them out to the text box.
+                                AppendText(result.Alternatives[0].Transcript);
+                                AppendText(Environment.NewLine);
                             }
                         }
                     }
                 });
 
 
-                // Send Audio Sections
+                // Send Audio (in chunks)
                 {
-
-                    var modelID = cubicModels[comboBox1.SelectedIndex].Id;
-
+                    // Send the configs as the first message.
+                    var modelID = cubicModels[modelPicker.SelectedIndex].Id;
                     var request = new CobaltSpeech.Cubic.StreamingRecognizeRequest();
-                    var cfg = new CobaltSpeech.Cubic.RecognitionConfig {
+                    var cfg = new CobaltSpeech.Cubic.RecognitionConfig
+                    {
                         ModelId = modelID,
                         AudioEncoding = CobaltSpeech.Cubic.RecognitionConfig.Types.Encoding.RawLinear16,
                         EnableWordTimeOffsets = false,
-                        EnableRawTranscript = false,
+                        EnableRawTranscript = true,
                         EnableConfusionNetwork = false,
                         EnableWordConfidence = false,
                     };
                     request.Config = cfg;
-                    await call.RequestStream.WriteAsync(request); // Send the configs
+                    await call.RequestStream.WriteAsync(request);
 
-                    // Setup object for streaming audio
+                    // Set up object for streaming audio.
                     request.Config = null;
                     request.Audio = new CobaltSpeech.Cubic.RecognitionAudio { };
 
-                    // Send the audio
+                    // Send the audio, in multiple messages.
                     const int chunkSize = 8192;
                     using (var file = File.OpenRead(this.textBoxFile.Text))
                     {
@@ -165,7 +165,7 @@ namespace CubicClient
                             await call.RequestStream.WriteAsync(request);
                         }
 
-                        //Close the stream
+                        // Close the stream
                         await call.RequestStream.CompleteAsync();
                     }
                 }
@@ -176,15 +176,15 @@ namespace CubicClient
             }
         }
 
-        delegate void SetTextCallback(string text);
-        private void SetText(string text)
+        delegate void AppendTextCallback(string text);
+        private void AppendText(string text)
         {
-            // InvokeRequired required compares the thread ID of the
+            // InvokeRequired compares the thread ID of the
             // calling thread to the thread ID of the creating thread.
             // If these threads are different, it returns true.
             if (this.textBoxFile.InvokeRequired)
             {
-                SetTextCallback d = new SetTextCallback(SetText);
+                AppendTextCallback d = new AppendTextCallback(AppendText);
                 this.Invoke(d, new object[] { text });
             }
             else

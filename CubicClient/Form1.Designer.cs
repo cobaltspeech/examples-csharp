@@ -39,7 +39,7 @@ namespace CubicClient
             this.buttonConnect = new System.Windows.Forms.Button();
             this.textBoxFile = new System.Windows.Forms.TextBox();
             this.buttonChangeFile = new System.Windows.Forms.Button();
-            this.comboBox1 = new System.Windows.Forms.ComboBox();
+            this.modelPicker = new System.Windows.Forms.ComboBox();
             this.labelModels = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
@@ -47,13 +47,13 @@ namespace CubicClient
             // 
             this.textBoxURL.Location = new System.Drawing.Point(93, 12);
             this.textBoxURL.Name = "textBoxURL";
-            this.textBoxURL.Size = new System.Drawing.Size(224, 20);
+            this.textBoxURL.Size = new System.Drawing.Size(305, 20);
             this.textBoxURL.TabIndex = 4;
             // 
             // checkBoxSecureConnection
             // 
             this.checkBoxSecureConnection.AutoSize = true;
-            this.checkBoxSecureConnection.Location = new System.Drawing.Point(323, 14);
+            this.checkBoxSecureConnection.Location = new System.Drawing.Point(404, 14);
             this.checkBoxSecureConnection.Name = "checkBoxSecureConnection";
             this.checkBoxSecureConnection.Size = new System.Drawing.Size(117, 17);
             this.checkBoxSecureConnection.TabIndex = 5;
@@ -75,7 +75,7 @@ namespace CubicClient
             // labelVersion
             // 
             this.labelVersion.AutoSize = true;
-            this.labelVersion.Location = new System.Drawing.Point(341, 39);
+            this.labelVersion.Location = new System.Drawing.Point(9, 270);
             this.labelVersion.Name = "labelVersion";
             this.labelVersion.Size = new System.Drawing.Size(48, 13);
             this.labelVersion.TabIndex = 7;
@@ -112,7 +112,7 @@ namespace CubicClient
             // 
             // buttonConnect
             // 
-            this.buttonConnect.Location = new System.Drawing.Point(446, 10);
+            this.buttonConnect.Location = new System.Drawing.Point(446, 34);
             this.buttonConnect.Name = "buttonConnect";
             this.buttonConnect.Size = new System.Drawing.Size(75, 23);
             this.buttonConnect.TabIndex = 11;
@@ -140,11 +140,11 @@ namespace CubicClient
             // 
             // comboBox1
             // 
-            this.comboBox1.FormattingEnabled = true;
-            this.comboBox1.Location = new System.Drawing.Point(93, 36);
-            this.comboBox1.Name = "comboBox1";
-            this.comboBox1.Size = new System.Drawing.Size(224, 21);
-            this.comboBox1.TabIndex = 15;
+            this.modelPicker.FormattingEnabled = true;
+            this.modelPicker.Location = new System.Drawing.Point(93, 36);
+            this.modelPicker.Name = "comboBoxModelPicker";
+            this.modelPicker.Size = new System.Drawing.Size(347, 21);
+            this.modelPicker.TabIndex = 15;
             // 
             // labelModels
             // 
@@ -162,7 +162,7 @@ namespace CubicClient
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(533, 292);
             this.Controls.Add(this.labelModels);
-            this.Controls.Add(this.comboBox1);
+            this.Controls.Add(this.modelPicker);
             this.Controls.Add(this.buttonChangeFile);
             this.Controls.Add(this.textBoxFile);
             this.Controls.Add(this.buttonConnect);
@@ -193,7 +193,7 @@ namespace CubicClient
         private System.Windows.Forms.Button buttonConnect;
         private System.Windows.Forms.TextBox textBoxFile;
         private System.Windows.Forms.Button buttonChangeFile;
-        private System.Windows.Forms.ComboBox comboBox1;
+        private System.Windows.Forms.ComboBox modelPicker;
         private System.Windows.Forms.Label labelModels;
     }
 }
