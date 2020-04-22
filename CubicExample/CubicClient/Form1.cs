@@ -160,7 +160,7 @@ namespace CubicClient
                         var buffer = new byte[chunkSize];
                         while ((bytesRead = file.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            var bytes = Google.Protobuf.ByteString.CopyFrom(buffer);
+                            var bytes = Google.Protobuf.ByteString.CopyFrom(buffer.Take(bytesRead).ToArray());
                             request.Audio.Data = bytes;
                             await call.RequestStream.WriteAsync(request);
                         }
