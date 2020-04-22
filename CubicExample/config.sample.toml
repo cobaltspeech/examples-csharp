@@ -1,0 +1,30 @@
+# Specify the Cubic server connection 
+[Server]
+    # Specify the server address as "<url>:<port>"
+    Address = "localhost:9001"
+
+    # Set to false if the server is running without a
+    # secure (TLS) connection (not recommended for
+    # production environments).
+    Secure = false
+
+[ASRConfig]
+    # Specify the Cubic model to use for ASR. This string should 
+    # match one of the models defined in the Cubic server config file.
+    ModelID = "1"
+
+    # Specify the encoding that the audio data will use
+    Encoding = "RAW_LINEAR16"
+
+    # Set to true if the streaming API should be used (recommended)
+    Streaming = true
+
+
+# Specify an external application to handle recording audio (e.g., sox,
+# arecord, etc.). The recording app should output data to stdout in the
+# format required by the model.
+[Recording]
+    # sox example (see http://sox.sourceforge.net/)
+    Application = "sox"
+    Args = "-q -d -c 1 -r 16000 -b 16 -L -e signed -t raw -"
+
