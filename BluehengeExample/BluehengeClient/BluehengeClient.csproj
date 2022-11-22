@@ -5,6 +5,30 @@
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Authors>Jacob Holloway</Authors>
+    <Company>Cobalt Speech and Language, Inc.</Company>
   </PropertyGroup>
+
+  <Target Name="DownloadProtobufFiles" BeforeTargets="Build">
+    <DownloadFile SourceUrl="https://raw.githubusercontent.com/cobaltspeech/proto/7b95fd0852426d9836d85314cdedf0d7aac62d21/proto/cobaltspeech/bluehenge/v1/bluehenge.proto" DestinationFolder="./proto/cobaltspeech/bluehenge/v1/">
+      <Output TaskParameter="DownloadedFile" ItemName="Content" />
+    </DownloadFile>
+    <DownloadFile SourceUrl="https://raw.githubusercontent.com/cobaltspeech/proto/7b95fd0852426d9836d85314cdedf0d7aac62d21/proto/cobaltspeech/diatheke/v3/diatheke.proto" DestinationFolder="./proto/cobaltspeech/diatheke/v3/">
+      <Output TaskParameter="DownloadedFile" ItemName="Content" />
+    </DownloadFile>
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
+    <PackageReference Include="Google.Protobuf" Version="3.21.9" />
+    <PackageReference Include="Grpc" Version="2.46.5" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.49.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.50.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
+    <Protobuf Include="**/*.proto" ProtoRoot="proto" OutputDir="$(Protobuf_OutputPath)" GrpcServices="Client" DependsOnTargets="DownloadProtobufFiles" />
+  </ItemGroup>
 
 </Project>
