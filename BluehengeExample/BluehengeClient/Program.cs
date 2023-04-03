@@ -4,9 +4,12 @@ using Grpc.Core;
 using Bluehenge = Cobaltspeech.Bluehenge.V1;
 using Diatheke = Cobaltspeech.Diatheke.V3;
 using Cobaltspeech.Diatheke.V3;
+using System.Runtime.CompilerServices;
 
 public class BluehengeExampleClient
 {
+    private static readonly string AUDIO_FILE_PATH = "audiofiles/ok_us8bit.wav";
+
     private static IEnumerable<byte[]> ReadFileInChunks(string filePath)
     {
         const int MAX_BUFFER = 8192;
@@ -43,6 +46,8 @@ public class BluehengeExampleClient
                 var client = new BluehengeExampleClient(o);
                 client.run();
             });
+
+        Console.WriteLine("thanks for playing!");
     }
 
     private Options opts { set; get; }
@@ -50,14 +55,15 @@ public class BluehengeExampleClient
     public BluehengeExampleClient(Options options)
     {
         this.opts = options;
-        Console.WriteLine("creating client.");
     }
 
     public void run()
     {
         // Create a gRPC connection.
+        Console.WriteLine("creating gRPC channel.");
         var channelOptions = new GrpcChannelOptions { Credentials = ChannelCredentials.Insecure };
         using var channel = GrpcChannel.ForAddress(this.opts.ServerAddress, channelOptions);
+        Console.WriteLine("creating client.");
         var client = new Bluehenge.BluehengeService.BluehengeServiceClient(channel);
 
         // Run the simple methods the server provides.
@@ -65,18 +71,23 @@ public class BluehengeExampleClient
         var firstModel = this.ListModels(client);
 
         // Now, in a separate function, we'll start into the more interesting stuff related to sessions.
-        this.runSession(client);
+        // Note: runSession is defined as an async function.  We'll need to wait for that to finish.  
+        //       But since run() is not an async function, we cannot use await this.runSession.
+        //       So, we call task.Wait().
+        this.runSession(client, firstModel).Wait();
+        Console.WriteLine("runSession finished");
     }
 
     public void Version(Bluehenge.BluehengeService.BluehengeServiceClient client)
     {
+        Console.WriteLine("calling Version =================");
         // Fetch the servers' models.
         var versionReq = new Bluehenge.VersionRequest();
         var versionResp = client.Version(versionReq);
 
         // Print the results
         Console.WriteLine(String.Format(
-            "Versions: Bluehenge: {0}; Others: {1}",
+            "Versions: Bluehenge: {0};\n          Others: {1}",
             versionResp.Bluehenge.ToString(),
             versionResp.DiathekeVersionResponse.ToString()
         ));
@@ -85,6 +96,7 @@ public class BluehengeExampleClient
     // ListModels will fetch all the models available, print them all out, and then return the first model available.
     public Diatheke.ModelInfo ListModels(Bluehenge.BluehengeService.BluehengeServiceClient client)
     {
+        Console.WriteLine("calling ListModels ==============");
         // Fetch the list of models.
         var req = new Bluehenge.ListModelsRequest();
         var listModelsResp = client.ListModels(req);
@@ -101,17 +113,36 @@ public class BluehengeExampleClient
         return listModelsResp.DiathekeListModelsResponse.Models[0];
     }
 
-    private async void runSession(Bluehenge.BluehengeService.BluehengeServiceClient client)
+    private async Task runSession(Bluehenge.BluehengeService.BluehengeServiceClient client, ModelInfo model)
     {
         // Create Session
-        var sessionResp = client.CreateSession(new Bluehenge.CreateSessionRequest());
+        Console.WriteLine(String.Format(
+            "runSession({0}) =============", model.Id
+        ));
+        Bluehenge.CreateSessionRequest sessionReq = new Bluehenge.CreateSessionRequest()
+        {
+            DiathekeCreateSessionRequest = new Diatheke.CreateSessionRequest() { ModelId = model.Id },
+        };
+        var sessionResp = await client.CreateSessionAsync(sessionReq);
         var sessionOutput = sessionResp.DiathekeCreateSessionResponse.SessionOutput;
+        Console.WriteLine("got createSession back");
+
+        // We will also download the procedure list data
+        var procedureList = client.ListProcedures(new Bluehenge.ListProceduresRequest{});
+        Console.WriteLine("Procedure List Data: ({0})", procedureList.Procedures.Count());
+        // Sort by ProcedureName
+        var pList = procedureList.Procedures.OrderBy(item => item.ProcedureNumber).ToList();
+        foreach (var p in pList)
+        {
+            Console.WriteLine(String.Format("Procedure({0}) {1}: {2}", p.Id, p.ProcedureNumber, p.Name));
+        }
 
         // Handle any action items that get returned from the ActionList.
-        // This will be our long living item.  We continue to handle responses from diatheke until 
-        // there is nothing left for us to do.
+        // This will be our long living application function.  We continue to handle 
+        // responses from diatheke until there is nothing left for us to do.
         for (; ; )
         {
+            Console.WriteLine("Processing Actions");
             // processAction handles one action at a time, and returns us the updated state.
             sessionOutput = await this.processActionAsync(client, sessionOutput);
             if (sessionOutput == null)
@@ -121,6 +152,7 @@ public class BluehengeExampleClient
         }
 
         // Once Diatheke is done with the action list, we'll delete the session and be done.
+        Console.WriteLine("Deleting session.");
         var deleteRequest = new Bluehenge.DeleteSessionRequest
         {
             DiathekeDeleteSessionRequest = new Diatheke.DeleteSessionRequest
@@ -137,6 +169,7 @@ public class BluehengeExampleClient
         // Iterate through each action in the list and determine its type.
         foreach (var action in sessionOut.ActionList)
         {
+            Console.WriteLine(String.Format("\tAction: {0}", action.ActionCase));
             switch (action.ActionCase)
             {
                 case Diatheke.ActionData.ActionOneofCase.Input:
@@ -159,7 +192,12 @@ public class BluehengeExampleClient
             }
         }
 
-        return null;
+        return sessionOut;
+    }
+
+    private void Debug(string msg, [CallerLineNumber] int lineNum = 0)
+    {
+        Console.WriteLine($"'#: {lineNum}  M: {msg}");
     }
 
     // waitForInput prompts the user for text input, then updates the
@@ -177,7 +215,7 @@ public class BluehengeExampleClient
             // reply immediately. If this flag is false, the app may wait
             // as long as it wants before processing user input (such as
             // waiting for a wake-word below).
-            Console.WriteLine("(Immediate input required)");
+            Console.WriteLine("\t\t(Immediate input required)");
         }
 
         if (inputAction.RequiresWakeWord)
@@ -185,59 +223,124 @@ public class BluehengeExampleClient
             // This action requires the wake-word to be spoken before
             // any other audio will be processed. Use a wake-word detector
             // and wait for it to trigger.
-            Console.WriteLine("(Wakeword required)");
+            Console.WriteLine("\t\t(Wakeword required)");
         }
 
-        // Create an ASR stream.
-        // The client will send multiple messages and get a single transcription response back.
-        var stream = client.StreamASR();
+        var sessionOutput = await waitForTextInput(client, session);
+        return sessionOutput;
 
-        #region audio upload
-        // First we send up a config message.
-        var req = new Bluehenge.StreamASRRequest
-        {
-            DiathekeStreamAsrRequest = new Diatheke.StreamASRRequest
-            {
-                Token = session.Token
-            }
-        };
-        stream.RequestStream.WriteAsync(req).Wait();
+        // return await recordAndSendAudio(client, session); // TODO: fix audio streaming.
+        // for now, we'll just do text based IO
+        // var updateResp = await client.UpdateSessionAsync(new Bluehenge.UpdateSessionRequest
+        //     {
+        //         DiathekeUpdateSessionRequest = new Diatheke.UpdateSessionRequest
+        //         {
+        //             SessionInput = new SessionInput
+        //             {
+        //                 Token = session.Token,
+        //                 Text = new TextInput {
+        //                     Text = "Start Procedure"
+        //                 }
+        //             }
+        //         }
+        //     });
+        // return updateResp.DiathekeUpdateSessionResponse.SessionOutput;
+    }
 
-        // Now we stream the audio until it's done.
-        // Note: in this example, we'll pull from an audio file.  Other applications might want to pull from 
-        // a microphone or other audio source.
-        foreach (var chunk in BluehengeExampleClient.ReadFileInChunks("MyFileName"))
-        {
-            req = new Bluehenge.StreamASRRequest
-            {
-                DiathekeStreamAsrRequest = new Diatheke.StreamASRRequest
-                {
-                    Audio = Google.Protobuf.ByteString.CopyFrom(chunk)
-                }
-            };
-            await stream.RequestStream.WriteAsync(req);
-        }
-        await stream.RequestStream.CompleteAsync(); // Let the server know we are done streaming.
-        #endregion
-
-        // Once we've written out all of the audio bytes, we can check for the response.
-        var asrResponse = await stream;
-
-        Console.WriteLine("  ASR Result: " + asrResponse.DiathekeStreamAsrResponse.AsrResult);
+    private async Task<Diatheke.SessionOutput> waitForTextInput(Bluehenge.BluehengeService.BluehengeServiceClient client,
+        Diatheke.SessionOutput session)
+    {
+        Console.Write("Please Input your text: >");
+        var userInput = Console.ReadLine();
 
         // Update the session with the result.
-        var updateResp = await client.UpdateSessionAsync(new Bluehenge.UpdateSessionRequest
+        var updateReq = new Bluehenge.UpdateSessionRequest
         {
             DiathekeUpdateSessionRequest = new Diatheke.UpdateSessionRequest
             {
-                SessionInput = new SessionInput
+                SessionInput = new Diatheke.SessionInput
                 {
                     Token = session.Token,
-                    Asr = asrResponse.DiathekeStreamAsrResponse.AsrResult,
+                    Text = new Diatheke.TextInput
+                    {
+                        Text = userInput,
+                    },
                 }
             }
-        });
-        return updateResp.DiathekeUpdateSessionResponse.SessionOutput;
+        };
+        var updateResp = await client.UpdateSessionAsync(updateReq);
+        var sessionOutput = updateResp.DiathekeUpdateSessionResponse.SessionOutput;
+        return sessionOutput;
+    }
+
+
+    private async Task<Diatheke.SessionOutput> recordAndSendAudio(Bluehenge.BluehengeService.BluehengeServiceClient client,
+        Diatheke.SessionOutput session)
+    {
+        // Create an ASR stream.
+        // The client will send multiple messages and get a single transcription response back.
+        using (var stream = client.StreamASR())
+        {
+            #region audio upload
+            // First we send up a config message.
+            var req = new Bluehenge.StreamASRRequest
+            {
+                DiathekeStreamAsrRequest = new Diatheke.StreamASRRequest
+                {
+                    Token = session.Token
+                }
+            };
+            await stream.RequestStream.WriteAsync(req);
+            Debug("request stream");
+            // Now we stream the audio until it's done.
+            // Note: in this example, we'll pull from an audio file.  Other applications might want to pull from 
+            // a microphone or other audio source.
+            foreach (var chunk in BluehengeExampleClient.ReadFileInChunks(AUDIO_FILE_PATH))
+            {
+                req = new Bluehenge.StreamASRRequest
+                {
+                    DiathekeStreamAsrRequest = new Diatheke.StreamASRRequest
+                    {
+                        Audio = Google.Protobuf.ByteString.CopyFrom(chunk)
+                    }
+                };
+                await stream.RequestStream.WriteAsync(req);
+            }
+            // Normally we'd have to call `await stream.RequestStream.CompleteAsync()` to let the server know
+            //  we are done streaming, but 
+            Debug("write async");
+
+            Debug("complete async");
+            #endregion
+
+            // Once we've written out all of the audio bytes, we can check for the response.
+            Bluehenge.StreamASRResponse? asrResponse = null;
+            try
+            {
+                asrResponse = await stream;
+                Debug("got response");
+            }
+            catch (Exception e)
+            {
+                Debug(e.Message);
+                return null;
+            }
+            Console.WriteLine("  ASR Result: " + asrResponse?.DiathekeStreamAsrResponse.AsrResult);
+
+            // Update the session with the result.
+            var updateResp = await client.UpdateSessionAsync(new Bluehenge.UpdateSessionRequest
+            {
+                DiathekeUpdateSessionRequest = new Diatheke.UpdateSessionRequest
+                {
+                    SessionInput = new SessionInput
+                    {
+                        Token = session.Token,
+                        Asr = asrResponse.DiathekeStreamAsrResponse.AsrResult,
+                    }
+                }
+            });
+            return updateResp.DiathekeUpdateSessionResponse.SessionOutput;
+        }
     }
 
     private async void handleReply(Bluehenge.BluehengeService.BluehengeServiceClient client,
@@ -266,6 +369,9 @@ public class BluehengeExampleClient
         writer.Close();
     }
 
+    private string procedureID = "";
+    private string taskNumber = "1";
+
     private async Task<Diatheke.SessionOutput> handleCommand(
         Bluehenge.BluehengeService.BluehengeServiceClient client,
         Diatheke.SessionOutput session, Diatheke.CommandAction command)
@@ -278,6 +384,19 @@ public class BluehengeExampleClient
         //                   ! IMPORTANT !                    //
         // This is where the meat of the application will go! //
         ////////////////////////////////////////////////////////
+        switch (command.Id)
+        {
+            case "set_procedure_id":
+                // Now we would have to call getprocedure to get the actual content of that procedure.
+                var procedureDetails = client.GetProcedures(new Bluehenge.GetProceduresRequest{Id = command.InputParameters["procedure_name"]});
+                Console.WriteLine("Procedure Details:" + procedureDetails);
+                // And then load PDFs or other assets available.
+                break;
+
+            default:
+                Console.WriteLine("Still need to implement case for "+command.Id);
+                break;
+        }
 
         // Here, we only demonstrate a few commands that are specific to the API
         // TODO: add in items related to entity and procedure requests:
@@ -358,7 +477,7 @@ public class BluehengeExampleClient
             // Now we stream the audio until it's done.
             // Note: in this example, we'll pull from an audio file.  Other applications might want to pull from 
             // a microphone or other audio source.
-            foreach (var chunk in BluehengeExampleClient.ReadFileInChunks("MyFileName"))
+            foreach (var chunk in BluehengeExampleClient.ReadFileInChunks(AUDIO_FILE_PATH))
             {
                 req = new Bluehenge.TranscribeRequest
                 {
