@@ -1,9 +1,8 @@
 ﻿using CommandLine;
 using Grpc.Net.Client;
 using Grpc.Core;
-using Bluehenge = Cobaltspeech.Bluehenge.V1;
+using Bluehenge = Cobaltspeech.Bluehenge.V2;
 using Diatheke = Cobaltspeech.Diatheke.V3;
-using Cobaltspeech.Diatheke.V3;
 using System.Runtime.CompilerServices;
 
 public class BluehengeExampleClient
@@ -31,10 +30,10 @@ public class BluehengeExampleClient
     public class Options
     {
         [Option('v', "verbose", Required = false, HelpText = "Set output to include verbose messages.")]
-        public bool Verbose { get; set; }
+        public bool Verbose { get; set; } = false;
 
         [Option('s', "server", Required = true, HelpText = "Bluehenge server address.  ex: http://localhost:9000")]
-        public String ServerAddress { get; set; }
+        public String ServerAddress { get; set; } = "http://localhost:9000";
     }
 
     static void Main(string[] args)
@@ -113,7 +112,7 @@ public class BluehengeExampleClient
         return listModelsResp.DiathekeListModelsResponse.Models[0];
     }
 
-    private async Task runSession(Bluehenge.BluehengeService.BluehengeServiceClient client, ModelInfo model)
+    private async Task runSession(Bluehenge.BluehengeService.BluehengeServiceClient client, Diatheke.ModelInfo model)
     {
         // Create Session
         Console.WriteLine(String.Format(
@@ -134,7 +133,7 @@ public class BluehengeExampleClient
         var pList = procedureList.Procedures.OrderBy(item => item.ProcedureNumber).ToList();
         foreach (var p in pList)
         {
-            Console.WriteLine(String.Format("Procedure({0}) {1}: {2}", p.Id, p.ProcedureNumber, p.Name));
+            Console.WriteLine(String.Format("Procedure({0}) {1}: {2}", p.Id, p.ProcedureNumber, p.ProcedureName));
         }
 
         // Handle any action items that get returned from the ActionList.
@@ -164,7 +163,7 @@ public class BluehengeExampleClient
     }
 
     // processActions executes the actions for the given session and returns an updated session.
-    private async Task<SessionOutput> processActionAsync(Bluehenge.BluehengeService.BluehengeServiceClient client, Diatheke.SessionOutput sessionOut)
+    private async Task<Diatheke.SessionOutput> processActionAsync(Bluehenge.BluehengeService.BluehengeServiceClient client, Diatheke.SessionOutput sessionOut)
     {
         // Iterate through each action in the list and determine its type.
         foreach (var action in sessionOut.ActionList)
@@ -323,7 +322,7 @@ public class BluehengeExampleClient
             catch (Exception e)
             {
                 Debug(e.Message);
-                return null;
+                return await Task.FromResult<Diatheke.SessionOutput>(new Diatheke.SessionOutput{});
             }
             Console.WriteLine("  ASR Result: " + asrResponse?.DiathekeStreamAsrResponse.AsrResult);
 
@@ -332,10 +331,10 @@ public class BluehengeExampleClient
             {
                 DiathekeUpdateSessionRequest = new Diatheke.UpdateSessionRequest
                 {
-                    SessionInput = new SessionInput
+                    SessionInput = new Diatheke.SessionInput
                     {
                         Token = session.Token,
-                        Asr = asrResponse.DiathekeStreamAsrResponse.AsrResult,
+                        Asr = asrResponse?.DiathekeStreamAsrResponse?.AsrResult,
                     }
                 }
             });
@@ -361,10 +360,11 @@ public class BluehengeExampleClient
         // Other applications might stream this to an audio player.
         string ttsFilename = Path.GetTempFileName();
         BinaryWriter writer = new BinaryWriter(File.OpenWrite(ttsFilename));
-        await foreach (var audio in stream.ResponseStream.ReadAllAsync())
+        await foreach (var resp in stream.ResponseStream.ReadAllAsync())
         {
-            writer.Write(audio.DiathekeStreamTtsResponse.Audio.ToByteArray());
+            writer.Write(resp.Audio.ToByteArray());
         }
+
         writer.Flush();
         writer.Close();
     }
@@ -388,7 +388,7 @@ public class BluehengeExampleClient
         {
             case "set_procedure_id":
                 // Now we would have to call getprocedure to get the actual content of that procedure.
-                var procedureDetails = client.GetProcedures(new Bluehenge.GetProceduresRequest{Id = command.InputParameters["procedure_name"]});
+                var procedureDetails = client.GetProcedure(new Bluehenge.GetProcedureRequest{Name = command.InputParameters["procedure_name"]});
                 Console.WriteLine("Procedure Details:" + procedureDetails);
                 // And then load PDFs or other assets available.
                 break;
@@ -418,7 +418,7 @@ public class BluehengeExampleClient
         {
             DiathekeUpdateSessionRequest = new Diatheke.UpdateSessionRequest
             {
-                SessionInput = new SessionInput
+                SessionInput = new Diatheke.SessionInput
                 {
                     Token = session.Token,
                     Cmd = result,
