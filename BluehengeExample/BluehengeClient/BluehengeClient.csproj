@@ -10,17 +10,17 @@
   </PropertyGroup>
 
   <Target Name="DownloadProtobufFiles">
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/bluehenge/v2/bluehenge.proto" -o "./proto/cobaltspeech/bluehenge/v2/bluehenge.proto"' />
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/diatheke/v3/diatheke.proto"   -o "./proto/cobaltspeech/diatheke/v3/diatheke.proto"' />
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/chosun/v2/chosun.proto"       -o "./proto/cobaltspeech/chosun/v2/chosun.proto"' />
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/cubic/v5/cubic.proto"         -o "./proto/cobaltspeech/cubic/v5/cubic.proto"' />
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/googleapis/googleapis/ecb1cf0/google/api/annotations.proto"                  -o "./proto/google/api/annotations.proto"' />
-    <Exec Command='curl --create-dirs "https://raw.githubusercontent.com/googleapis/googleapis/ecb1cf0/google/api/http.proto"                         -o "./proto/google/api/http.proto"' />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/bluehenge/v2/bluehenge.proto&quot; -o &quot;./proto/cobaltspeech/bluehenge/v2/bluehenge.proto&quot;" />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/diatheke/v3/diatheke.proto&quot;   -o &quot;./proto/cobaltspeech/diatheke/v3/diatheke.proto&quot;" />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/chosun/v2/chosun.proto&quot;       -o &quot;./proto/cobaltspeech/chosun/v2/chosun.proto&quot;" />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/cobaltspeech/proto/b26bfac/proto/cobaltspeech/cubic/v5/cubic.proto&quot;         -o &quot;./proto/cobaltspeech/cubic/v5/cubic.proto&quot;" />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/googleapis/googleapis/ecb1cf0/google/api/annotations.proto&quot;                  -o &quot;./proto/google/api/annotations.proto&quot;" />
+    <Exec Command="curl --create-dirs &quot;https://raw.githubusercontent.com/googleapis/googleapis/ecb1cf0/google/api/http.proto&quot;                         -o &quot;./proto/google/api/http.proto&quot;" />
   </Target>
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="Google.Protobuf" Version="3.21.9" />
+    <PackageReference Include="Google.Protobuf" Version="3.22.1" />
     <PackageReference Include="Grpc" Version="2.46.5" />
     <PackageReference Include="Grpc.Net.Client" Version="2.49.0" />
     <PackageReference Include="Grpc.Tools" Version="2.50.0">
@@ -28,11 +28,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
 
-    <Protobuf 
-      Include="**/*.proto"
-      ProtoRoot="proto"
-      OutputDir="$(Protobuf_OutputPath)"
-      GrpcServices="Client" />
+    <Protobuf Include="**/*.proto" ProtoRoot="proto" OutputDir="$(Protobuf_OutputPath)" GrpcServices="Client" />
   </ItemGroup>
 
 </Project>

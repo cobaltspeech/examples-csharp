@@ -1,13 +1,14 @@
-﻿using CommandLine;
+using CommandLine;
 using Grpc.Net.Client;
 using Grpc.Core;
 using Bluehenge = Cobaltspeech.Bluehenge.V2;
 using Diatheke = Cobaltspeech.Diatheke.V3;
 using System.Runtime.CompilerServices;
+using Google.Protobuf;
 
 public class BluehengeExampleClient
 {
-    private static readonly string AUDIO_FILE_PATH = "audiofiles/ok_us8bit.wav";
+    private static readonly string AUDIO_FILE_PATH = "audiofiles/okay_cobalt_start_connecting_spr.wav";
 
     private static IEnumerable<byte[]> ReadFileInChunks(string filePath)
     {
@@ -225,10 +226,15 @@ public class BluehengeExampleClient
             Console.WriteLine("\t\t(Wakeword required)");
         }
 
-        var sessionOutput = await waitForTextInput(client, session);
-        return sessionOutput;
+        // This was done to just support text
+        // var sessionOutput = await waitForTextInput(client, session);
+        // return sessionOutput;
 
-        // return await recordAndSendAudio(client, session); // TODO: fix audio streaming.
+        return await recordAndSendAudio(client, session); // TODO: fix audio streaming.
+        // IS THIS NEEDED? WE ARE ALREADY UPDATING THE SESSION
+        // ALREADY INSIDE THE `recordAndSendAudio` function
+
+
         // for now, we'll just do text based IO
         // var updateResp = await client.UpdateSessionAsync(new Bluehenge.UpdateSessionRequest
         //     {
@@ -294,36 +300,30 @@ public class BluehengeExampleClient
             // Now we stream the audio until it's done.
             // Note: in this example, we'll pull from an audio file.  Other applications might want to pull from 
             // a microphone or other audio source.
-            foreach (var chunk in BluehengeExampleClient.ReadFileInChunks(AUDIO_FILE_PATH))
+            using var fileStream = new FileStream(AUDIO_FILE_PATH, FileMode.Open, FileAccess.Read);
+            var buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = fileStream.Read(buffer, 0, buffer.Length)) > 0)
             {
-                req = new Bluehenge.StreamASRRequest
+                var audioRequest = new Bluehenge.StreamASRRequest
                 {
                     DiathekeStreamAsrRequest = new Diatheke.StreamASRRequest
                     {
-                        Audio = Google.Protobuf.ByteString.CopyFrom(chunk)
+                        Audio = ByteString.CopyFrom(buffer, 0, bytesRead)
+
                     }
                 };
-                await stream.RequestStream.WriteAsync(req);
+                await stream.RequestStream.WriteAsync(audioRequest);
             }
-            // Normally we'd have to call `await stream.RequestStream.CompleteAsync()` to let the server know
-            //  we are done streaming, but 
+            await stream.RequestStream.CompleteAsync();
+
             Debug("write async");
 
             Debug("complete async");
             #endregion
 
             // Once we've written out all of the audio bytes, we can check for the response.
-            Bluehenge.StreamASRResponse? asrResponse = null;
-            try
-            {
-                asrResponse = await stream;
-                Debug("got response");
-            }
-            catch (Exception e)
-            {
-                Debug(e.Message);
-                return await Task.FromResult<Diatheke.SessionOutput>(new Diatheke.SessionOutput{});
-            }
+            var asrResponse = await stream.ResponseAsync;
             Console.WriteLine("  ASR Result: " + asrResponse?.DiathekeStreamAsrResponse.AsrResult);
 
             // Update the session with the result.
